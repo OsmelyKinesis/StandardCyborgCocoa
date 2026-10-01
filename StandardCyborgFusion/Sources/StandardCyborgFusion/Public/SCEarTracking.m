@@ -12,7 +12,6 @@
 #import "CVPixelBufferHelpers.h"
 #import "MathHelpers.h"
 #import "SCEarTracking.h"
-#import "SCEarTrackingModel.h"
 
 NS_ASSUME_NONNULL_BEGIN
 

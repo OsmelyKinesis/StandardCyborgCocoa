@@ -114,6 +114,15 @@ let package = Package(
                 "ZipArchive",
             ],
             path: "StandardCyborgFusion/Sources",
+            // The .mlmodel sources are excluded and shipped precompiled: letting SwiftPM compile them
+            // triggers Core ML header generation, which tries to install into /usr/local/include and
+            // fails on Xcode 27.
+            exclude: ["StandardCyborgFusion/Models"],
+            resources: [
+                .copy("StandardCyborgFusion/ModelsCompiled/SCEarLandmarking.mlmodelc"),
+                .copy("StandardCyborgFusion/ModelsCompiled/SCEarTrackingModel.mlmodelc"),
+                .copy("StandardCyborgFusion/ModelsCompiled/SCFootTrackingModel.mlmodelc"),
+            ],
             publicHeadersPath: "include",
             cxxSettings: [
                 // Always optimize, even for debug builds, in order to be usable while debugging the rest of an app

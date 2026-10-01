@@ -12,7 +12,6 @@
 #import "CVPixelBufferHelpers.h"
 #import "MathHelpers.h"
 #import "SCFootTracking.h"
-#import "SCFootTrackingModel.h"
 
 NS_ASSUME_NONNULL_BEGIN
 

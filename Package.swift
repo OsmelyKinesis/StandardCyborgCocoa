@@ -2,6 +2,21 @@
 
 import PackageDescription
 
+/// Builds the package's own code as Release even when the app runs in Debug.
+///
+/// Xcode's Debug configuration defines DEBUG=1, enables libc++'s debug hardening mode and leaves
+/// assertions on. Besides slowing down reconstruction (Eigen and checked containers in every inner
+/// loop), DEBUG switches PBFModel to a fixed 1/30 s frame interval meant for very slow debug runs,
+/// so tracking degrades in apps launched from Xcode. Passed as unsafe flags, these come after
+/// Xcode's own and override them.
+let releaseFlags = [
+    "-Os",
+    "-UDEBUG",
+    "-DNDEBUG",
+    "-U_LIBCPP_HARDENING_MODE",
+    "-D_LIBCPP_HARDENING_MODE=_LIBCPP_HARDENING_MODE_NONE",
+]
+
 let package = Package(
     name: "StandardCyborg",
     platforms: [
@@ -55,7 +70,7 @@ let package = Package(
             publicHeadersPath: "include",
             cxxSettings: [
                 .define("STD_LIB_FLAG"),
-                .unsafeFlags(["-Wno-dangling-else", "-Wno-nontrivial-memcall"]),
+                .unsafeFlags(["-Wno-dangling-else", "-Wno-nontrivial-memcall"] + releaseFlags),
             ],
             linkerSettings: [
                 .linkedFramework("Foundation"),
@@ -95,7 +110,7 @@ let package = Package(
             path: "scsdk/Sources/standard_cyborg",
             publicHeadersPath: "include",
             cxxSettings: [
-                .unsafeFlags(["-fobjc-arc", "-Os", "-fno-math-errno"]),
+                .unsafeFlags(["-fobjc-arc", "-fno-math-errno"] + releaseFlags),
                 .define("FMT_HEADER_ONLY", to: "1", .when(platforms: [.iOS, .macOS])),
                 .define("HAVE_CONFIG_H", to: "1", .when(platforms: [.iOS, .macOS])),
                 .define("HAVE_PTHREAD", to: "1", .when(platforms: [.iOS, .macOS])),
@@ -124,9 +139,13 @@ let package = Package(
                 .copy("StandardCyborgFusion/ModelsCompiled/SCFootTrackingModel.mlmodelc"),
             ],
             publicHeadersPath: "include",
+            cSettings: [
+                // The Objective-C (.m) sources too, which cxxSettings doesn't cover
+                .unsafeFlags(releaseFlags),
+            ],
             cxxSettings: [
                 // Always optimize, even for debug builds, in order to be usable while debugging the rest of an app
-                .unsafeFlags(["-fobjc-arc", "-Os", "-fno-math-errno", "-ffast-math"]),
+                .unsafeFlags(["-fobjc-arc", "-fno-math-errno", "-ffast-math"] + releaseFlags),
                 .headerSearchPath("."),
                 .headerSearchPath("../libigl/include"),
                 .headerSearchPath("StandardCyborgFusion/Algorithm"),

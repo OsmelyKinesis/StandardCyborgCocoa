@@ -50,6 +50,26 @@ static NSString * const _MetadataJSONFilename = @"Metadata.json";
 @implementation _RGBFrameMetadata
 @end
 
+@interface SCMeshTexturingFrame ()
+- (instancetype)initWithMetadata:(_RGBFrameMetadata *)metadata;
+@end
+
+@implementation SCMeshTexturingFrame
+
+- (instancetype)initWithMetadata:(_RGBFrameMetadata *)metadata
+{
+    self = [super init];
+    if (self) {
+        _imageURL = metadata.imageURL;
+        _viewMatrix = metadata.viewMatrix;
+        _projectionMatrix = metadata.projectionMatrix;
+        _frameIndex = metadata.frameIndex;
+    }
+    return self;
+}
+
+@end
+
 
 @implementation SCMeshTexturing {
     CIContext *_context;
@@ -344,6 +364,22 @@ static NSString * const _MetadataJSONFilename = @"Metadata.json";
 }
 
 // clang-format on
+- (void)fetchSavedFramesWithCompletion:(void (^)(NSArray<SCMeshTexturingFrame *> *frames))completion
+{
+    // Frames are appended and their JPEGs written on _reconstructionQueue, so a block queued behind
+    // them sees every pending frame fully written and reads _metadatas without racing those writes.
+    dispatch_async(_reconstructionQueue, ^{
+        NSMutableArray<SCMeshTexturingFrame *> *frames = [NSMutableArray arrayWithCapacity:[_metadatas count]];
+        for (_RGBFrameMetadata *metadata in _metadatas) {
+            [frames addObject:[[SCMeshTexturingFrame alloc] initWithMetadata:metadata]];
+        }
+        
+        dispatch_async(dispatch_get_main_queue(), ^{
+            completion(frames);
+        });
+    });
+}
+
 - (void)reset
 {
     [self _removeContainerDirectory];

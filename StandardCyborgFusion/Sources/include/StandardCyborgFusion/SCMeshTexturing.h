@@ -37,6 +37,29 @@ typedef NS_ENUM(NSUInteger, SCMeshColoringStrategy) {
 };
 
 /**
+ A color frame saved via -saveColorBufferForReconstruction:withViewMatrix:projectionMatrix:,
+ as provided by -fetchSavedFramesWithCompletion:.
+ */
+@interface SCMeshTexturingFrame : NSObject
+
+/** The frame's JPEG on disk, in the orientation the color buffer was passed in
+    (flipped when flipsInputHorizontally is set). Valid until -reset or deallocation. */
+@property (nonatomic, readonly) NSURL *imageURL;
+
+/** The view matrix given for this frame, as provided by SCReconstructionManager's delegate */
+@property (nonatomic, readonly) simd_float4x4 viewMatrix;
+
+/** The projection matrix given for this frame, as provided by SCReconstructionManager's delegate */
+@property (nonatomic, readonly) simd_float4x4 projectionMatrix;
+
+/** The order in which this frame was saved, starting at 0 */
+@property (nonatomic, readonly) NSInteger frameIndex;
+
+- (instancetype)init NS_UNAVAILABLE;
+
+@end
+
+/**
  Use this class during and at the end of scanning to generate a textured mesh from a SCPointCloud.
  */
 @interface SCMeshTexturing : NSObject
@@ -101,6 +124,16 @@ typedef NS_ENUM(NSUInteger, SCMeshColoringStrategy) {
                                  progress:(void (^)(float progress, BOOL *shouldStop))progress
                                completion:(void (^)(NSError * _Nullable, SCMesh * _Nullable))completion
 NS_SWIFT_NAME(reconstructMesh(pointCloud:textureResolution:meshingParameters:coloringStrategy:progress:completion:));
+
+/**
+ @discussion
+    Provides the color frames saved so far, in the order they were saved, for use outside of
+    -reconstructMeshWithWithPointCloud:. Runs after every pending frame has been written to disk,
+    so each frame's imageURL is complete when the completion is called.
+ @param completion Called on the main queue
+ */
+- (void)fetchSavedFramesWithCompletion:(void (^)(NSArray<SCMeshTexturingFrame *> *frames))completion
+NS_SWIFT_NAME(fetchSavedFrames(completion:));
 
 /**
  Call this to reset the internal state for a new scan after performing or abandoning a reconstruction.

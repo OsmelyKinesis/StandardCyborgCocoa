@@ -87,7 +87,8 @@ NS_SWIFT_NAME(accumulate(depthBuffer:colorBuffer:calibrationData:));
  camera pose (camera -> world, in the reconstruction's camera basis but any fixed world, e.g. from ARKit
  face tracking). Only its motion since the last tracked frame is used: it seeds ICP, so tracking survives
  moves too large for ICP alone. Such frames are judged by how far ICP had to correct the prediction
- rather than by the camera's velocity. */
+ rather than by the camera's velocity. Predicted motions too small to rise above the prediction's noise
+ don't seed ICP, so slow motion is tracked as without a prediction. */
 - (void)accumulateDepthBuffer:(CVPixelBufferRef)depthBuffer
                   colorBuffer:(CVPixelBufferRef)colorBuffer
               calibrationData:(AVCameraCalibrationData *)calibrationData

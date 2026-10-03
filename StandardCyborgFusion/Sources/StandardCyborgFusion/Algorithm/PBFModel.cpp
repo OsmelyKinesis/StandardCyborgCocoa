@@ -197,10 +197,20 @@ PBFAssimilatedFrameMetadata PBFModel::assimilate(ProcessedFrame& frame,
     if (_surfels.size() > 0) {
         // With predictions for this frame and the last tracked one, start ICP from the last tracked pose
         // moved by the predicted motion, so it converges even after a move too large to find on its own.
+        // Motions within the prediction's noise start from the last tracked pose as usual.
         const Matrix4f trackedExtrinsicMatrix = _extrinsicMatrix;
-        const bool seedsFromPrediction = predictedViewMatrix != NULL && _hasTrackedPrediction;
-        if (seedsFromPrediction) {
-            _extrinsicMatrix = trackedExtrinsicMatrix * _trackedPrediction.inverse() * (*predictedViewMatrix);
+        bool seedsFromPrediction = false;
+        if (predictedViewMatrix != NULL && _hasTrackedPrediction) {
+            Matrix4f predictedMotion = _trackedPrediction.inverse() * (*predictedViewMatrix);
+            float cosine = 0.5f * (predictedMotion.topLeftCorner<3, 3>().trace() - 1.0f);
+            float motionAngle = std::acos(std::fmax(-1.0f, std::fmin(1.0f, cosine)));
+            float motionDistance = predictedMotion.topRightCorner<3, 1>().norm();
+            
+            seedsFromPrediction = motionAngle > pbfConfig.minPredictedMotionAngle
+                || motionDistance > pbfConfig.minPredictedMotion;
+            if (seedsFromPrediction) {
+                _extrinsicMatrix = trackedExtrinsicMatrix * predictedMotion;
+            }
         }
 
         ICPResult icpResult = _runICP(frame, surfelFusionConfiguration, icpConfig, pbfConfig);

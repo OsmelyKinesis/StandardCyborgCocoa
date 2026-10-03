@@ -169,7 +169,8 @@ PBFAssimilatedFrameMetadata PBFModel::assimilate(ProcessedFrame& frame,
                                                  ICPConfiguration icpConfig,
                                                  SurfelFusionConfiguration surfelFusionConfiguration,
                                                  double currentTime,
-                                                 const std::vector<ScreenSpaceLandmark>* screenSpaceLandmarks)
+                                                 const std::vector<ScreenSpaceLandmark>* screenSpaceLandmarks,
+                                                 const Eigen::Matrix4f* predictedViewMatrix)
 {
     // Summary of algorithm:
     // The first frame is defined to be identity for the world coordinates
@@ -194,6 +195,14 @@ PBFAssimilatedFrameMetadata PBFModel::assimilate(ProcessedFrame& frame,
     const size_t height = rawFrame.height;
     
     if (_surfels.size() > 0) {
+        // With predictions for this frame and the last tracked one, start ICP from the last tracked pose
+        // moved by the predicted motion, so it converges even after a move too large to find on its own.
+        const Matrix4f trackedExtrinsicMatrix = _extrinsicMatrix;
+        const bool seedsFromPrediction = predictedViewMatrix != NULL && _hasTrackedPrediction;
+        if (seedsFromPrediction) {
+            _extrinsicMatrix = trackedExtrinsicMatrix * _trackedPrediction.inverse() * (*predictedViewMatrix);
+        }
+
         ICPResult icpResult = _runICP(frame, surfelFusionConfiguration, icpConfig, pbfConfig);
 
         Matrix4f extrinsicMatrixTmp = toMatrix4f(icpResult.sourceTransform) * _extrinsicMatrix;
@@ -211,7 +220,22 @@ PBFAssimilatedFrameMetadata PBFModel::assimilate(ProcessedFrame& frame,
             
             CameraVelocity cv = _cameraVelocity(previousFrameMeta, &frameMeta);
             
-            if (cv.angularVelocity.hasNaN() || cv.angularVelocity.norm() > pbfConfig.maxCameraAngularVelocity) {
+            if (seedsFromPrediction) {
+                // The motion came from the prediction and may be large, so judge the prediction instead:
+                // a large ICP correction means it was wrong.
+                Matrix4f correction = toMatrix4f(icpResult.sourceTransform);
+                float cosine = 0.5f * (correction.topLeftCorner<3, 3>().trace() - 1.0f);
+                float correctionAngle = std::acos(std::fmax(-1.0f, std::fmin(1.0f, cosine)));
+                float correctionDistance = correction.topRightCorner<3, 1>().norm();
+                
+                if (correctionAngle > pbfConfig.maxPredictionCorrectionAngle
+                    || correctionDistance > pbfConfig.maxPredictionCorrection) {
+                    DEBUG_LOG("Rejecting ICP: correction of the predicted pose too large (%f rad, %f m)", correctionAngle, correctionDistance);
+                    frameMeta.icpUnusedIterationFraction = 0;
+                }
+            }
+            
+            else if (cv.angularVelocity.hasNaN() || cv.angularVelocity.norm() > pbfConfig.maxCameraAngularVelocity) {
                 DEBUG_LOG("Rejecting ICP due to bad fit with angular velocity %f", cv.angularVelocity.norm());
                 frameMeta.icpUnusedIterationFraction = 0;
             }
@@ -224,7 +248,11 @@ PBFAssimilatedFrameMetadata PBFModel::assimilate(ProcessedFrame& frame,
         
         if (frameMeta.icpUnusedIterationFraction > 0) {
             _extrinsicMatrix = extrinsicMatrixTmp;
+            _hasTrackedPrediction = predictedViewMatrix != NULL;
+            if (_hasTrackedPrediction) { _trackedPrediction = *predictedViewMatrix; }
         } else {
+            // The seed was only a starting point: tracking stays at the last tracked pose
+            _extrinsicMatrix = trackedExtrinsicMatrix;
             // It didn't converge in time, so bail out
             DEBUG_LOG("ICP didn't converge with enough quality (%f) after %d/%d iterations. Ignoring frame.", frameMeta.icpUnusedIterationFraction, icpResult.iterationCount, icpConfig.maxIterations);
             _assimilatedFrameMetadatas.push_back(frameMeta);
@@ -235,6 +263,10 @@ PBFAssimilatedFrameMetadata PBFModel::assimilate(ProcessedFrame& frame,
     if (_surfels.size() == 0) {
         // Initialize the _surfels vector to a realistic eventual size
         _surfels.reserve(width * height);
+
+        // The first frame defines the world; its prediction anchors the next frame's predicted motion
+        _hasTrackedPrediction = predictedViewMatrix != NULL;
+        if (_hasTrackedPrediction) { _trackedPrediction = *predictedViewMatrix; }
     }
     
     if (!_surfelFusion.doFusion(surfelFusionConfiguration,
@@ -326,6 +358,8 @@ void PBFModel::reset(unsigned int randomSeed)
     DEBUG_LOG("Resetting");
 
     _extrinsicMatrix.setIdentity();
+    _hasTrackedPrediction = false;
+    _trackedPrediction.setIdentity();
 
     _fastRNG.seed(randomSeed);
 

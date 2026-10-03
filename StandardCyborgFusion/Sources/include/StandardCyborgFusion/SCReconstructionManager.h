@@ -83,6 +83,17 @@ typedef struct {
               calibrationData:(AVCameraCalibrationData *)calibrationData
 NS_SWIFT_NAME(accumulate(depthBuffer:colorBuffer:calibrationData:));
 
+/** Like accumulateDepthBuffer:colorBuffer:calibrationData:, with an external estimate of this frame's
+ camera pose (camera -> world, in the reconstruction's camera basis but any fixed world, e.g. from ARKit
+ face tracking). Only its motion since the last tracked frame is used: it seeds ICP, so tracking survives
+ moves too large for ICP alone. Such frames are judged by how far ICP had to correct the prediction
+ rather than by the camera's velocity. */
+- (void)accumulateDepthBuffer:(CVPixelBufferRef)depthBuffer
+                  colorBuffer:(CVPixelBufferRef)colorBuffer
+              calibrationData:(AVCameraCalibrationData *)calibrationData
+          predictedViewMatrix:(simd_float4x4)predictedViewMatrix
+NS_SWIFT_NAME(accumulate(depthBuffer:colorBuffer:calibrationData:predictedViewMatrix:));
+
 /** Pass in device motion updates as fast as they are made available by the system */
 - (void)accumulateDeviceMotion:(CMDeviceMotion *)deviceMotion;
 

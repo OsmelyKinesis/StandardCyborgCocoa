@@ -12,6 +12,7 @@
 #import <AVFoundation/AVFoundation.h>
 #import <CoreMotion/CoreMotion.h>
 #import "CVPixelBufferHelpers.h"
+#import "EigenHelpers.hpp"
 #import "SCFusionBundle.h"
 #import "GeometryHelpers.hpp"
 #import "MathHelpers.h"
@@ -43,6 +44,9 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, readonly) CVPixelBufferRef depthBuffer;
 @property (nonatomic, readonly) CVPixelBufferRef colorBuffer;
 @property (nonatomic, readonly) AVCameraCalibrationData *calibrationData;
+/// An external estimate of the frame's camera pose (see accumulateDepthBuffer:...:predictedViewMatrix:)
+@property (nonatomic) BOOL hasPredictedViewMatrix;
+@property (nonatomic) simd_float4x4 predictedViewMatrix;
 
 - (instancetype)initWithSequence:(int)sequence
                      depthBuffer:(CVPixelBufferRef)depthBuffer
@@ -366,6 +370,31 @@ NS_ASSUME_NONNULL_BEGIN
                   colorBuffer:(CVPixelBufferRef)colorBuffer
               calibrationData:(AVCameraCalibrationData *)calibrationData
 {
+    [self _accumulateDepthBuffer:depthBuffer
+                     colorBuffer:colorBuffer
+                 calibrationData:calibrationData
+          hasPredictedViewMatrix:NO
+             predictedViewMatrix:matrix_identity_float4x4];
+}
+
+- (void)accumulateDepthBuffer:(CVPixelBufferRef)depthBuffer
+                  colorBuffer:(CVPixelBufferRef)colorBuffer
+              calibrationData:(AVCameraCalibrationData *)calibrationData
+          predictedViewMatrix:(simd_float4x4)predictedViewMatrix
+{
+    [self _accumulateDepthBuffer:depthBuffer
+                     colorBuffer:colorBuffer
+                 calibrationData:calibrationData
+          hasPredictedViewMatrix:YES
+             predictedViewMatrix:predictedViewMatrix];
+}
+
+- (void)_accumulateDepthBuffer:(CVPixelBufferRef)depthBuffer
+                   colorBuffer:(CVPixelBufferRef)colorBuffer
+               calibrationData:(AVCameraCalibrationData *)calibrationData
+        hasPredictedViewMatrix:(BOOL)hasPredictedViewMatrix
+           predictedViewMatrix:(simd_float4x4)predictedViewMatrix
+{
     if (depthBuffer == NULL || colorBuffer == NULL || calibrationData == nil) { return; }
     CVPixelBufferRetain(depthBuffer);
     CVPixelBufferRetain(colorBuffer);
@@ -378,6 +407,8 @@ NS_ASSUME_NONNULL_BEGIN
                                                                     depthBuffer:depthBuffer
                                                                     colorBuffer:colorBuffer
                                                                 calibrationData:calibrationData];
+        data.hasPredictedViewMatrix = hasPredictedViewMatrix;
+        data.predictedViewMatrix = predictedViewMatrix;
         CVPixelBufferRelease(depthBuffer);
         CVPixelBufferRelease(colorBuffer);
         
@@ -575,7 +606,9 @@ static const float kCenterDepthExpansionRatio = 1.4;
     
     [self _modelQueue_configureModelForRawFrame];
     
-    auto metadata = _modelQueue_model->assimilate(*_modelQueue_frame, _pbfConfig, _icpConfig, _surfelFusionConfig, startTime);
+    Eigen::Matrix4f predictedViewMatrix = toMatrix4f(data.predictedViewMatrix);
+    auto metadata = _modelQueue_model->assimilate(*_modelQueue_frame, _pbfConfig, _icpConfig, _surfelFusionConfig, startTime,
+                                                  NULL, data.hasPredictedViewMatrix ? &predictedViewMatrix : NULL);
     
 #ifndef XCODE_ACTION_install // Avoid logging in archive builds
     float quality = metadata.icpUnusedIterationFraction;

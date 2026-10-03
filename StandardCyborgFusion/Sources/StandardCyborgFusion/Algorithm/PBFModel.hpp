@@ -40,7 +40,8 @@ public:
                                            ICPConfiguration icpConfig,
                                            SurfelFusionConfiguration surfelFusionConfiguration,
                                            double currentTime,
-                                           const std::vector<ScreenSpaceLandmark>* screenSpaceLandmarks = NULL);
+                                           const std::vector<ScreenSpaceLandmark>* screenSpaceLandmarks = NULL,
+                                           const Eigen::Matrix4f* predictedViewMatrix = NULL);
 
     PBFFinalStatistics finishAssimilating(SurfelFusionConfiguration surfelFusionConfiguration);
 
@@ -67,6 +68,11 @@ private:
     SurfelFusion _surfelFusion;
 
     Eigen::Matrix4f _extrinsicMatrix = Eigen::Matrix4f::Identity();
+
+    // The external prediction of the last tracked frame's pose, if it came with one. Its motion to the
+    // next frame's prediction seeds that frame's ICP.
+    bool _hasTrackedPrediction = false;
+    Eigen::Matrix4f _trackedPrediction = Eigen::Matrix4f::Identity();
 
     void _cullLowConfidence(bool ignoreLifetime, int minWeight, std::vector<int>* deletedSurfelList = NULL);
     ICPResult _runICP(ProcessedFrame& frame, SurfelFusionConfiguration surfelFusionConfiguration, ICPConfiguration icpConfig, PBFConfiguration pbfConfig);

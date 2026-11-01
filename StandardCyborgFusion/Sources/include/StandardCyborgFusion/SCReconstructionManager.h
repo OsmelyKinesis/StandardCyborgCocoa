@@ -59,6 +59,11 @@ typedef struct {
 /** When non-empty, clips the reconstruction region of incoming depth buffers and frames to this position and size, each normalized from [0..1] */
 @property (nonatomic) CGRect normalizedFrameClipRegion;
 
+/** Factor applied to the camera calibration's focal length wherever StandardCyborg projects with it (depth
+    reconstruction and mesh texturing), for every manager. Defaults to 1.019, StandardCyborg's 2019 empirical
+    correction; 1.0 uses the calibration as Apple gives it. Set it before a scan starts. */
+@property (class, nonatomic) float focalLengthScaleFactor;
+
 /** The camera calibration data used by the most recently passed depth frame. */
 @property (nonatomic, readonly) AVCameraCalibrationData *latestCameraCalibrationData;
 @property (nonatomic, readonly) NSInteger latestCameraCalibrationFrameWidth;

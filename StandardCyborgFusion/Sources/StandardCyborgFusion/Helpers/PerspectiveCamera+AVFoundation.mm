@@ -10,6 +10,7 @@
 #import <standard_cyborg/math/Mat3x3.hpp>
 #import <standard_cyborg/math/Mat3x4.hpp>
 #import <standard_cyborg/math/Vec2.hpp>
+#import <atomic>
 #import <vector>
 
 #import "EigenHelpers.hpp"
@@ -17,6 +18,23 @@
 #import "PerspectiveCamera+AVFoundation.hpp"
 
 using namespace standard_cyborg;
+
+// Determined after length investigation of the effect of focal length on dimensional accuracy and
+// loop closure. There's a fair bit of scatter in the data, so this is certainly not "correct",
+// merely "much, much better than nothing." For more details, see:
+//    https://github.com/StandardCyborg/ScanAnalysis/tree/master/ScanAnalysis/2019-05-09-dimensional-accuracy-calibration
+// Settable, so a scan can be made with the calibration's own focal length (1.0) to compare.
+static std::atomic<float> gFocalLengthScaleFactor { 1.019f };
+
+float AVCameraCalibrationFocalLengthScaleFactor(void)
+{
+    return gFocalLengthScaleFactor.load();
+}
+
+void SetAVCameraCalibrationFocalLengthScaleFactor(float factor)
+{
+    gFocalLengthScaleFactor.store(factor);
+}
 
 sc3d::PerspectiveCamera PerspectiveCameraFromAVCameraCalibrationData(AVCameraCalibrationData *calibrationData, size_t pixelsWide, size_t pixelsHigh)
 {
@@ -33,11 +51,7 @@ sc3d::PerspectiveCamera PerspectiveCameraFromAVCameraCalibrationData(AVCameraCal
 
     sc3d::PerspectiveCamera camera;
 
-    // Determined after length investigation of the effect of focal length on dimensional accuracy and
-    // loop closure. There's a fair bit of scatter in the data, so this is certainly not "correct",
-    // merely "much, much better than nothing." For more details, see:
-    //    https://github.com/StandardCyborg/ScanAnalysis/tree/master/ScanAnalysis/2019-05-09-dimensional-accuracy-calibration
-    camera.setFocalLengthScaleFactor(1.019f);
+    camera.setFocalLengthScaleFactor(gFocalLengthScaleFactor.load());
 
     math::Mat3x4 extrinsicMatrix(toMat3x4(calibrationData.extrinsicMatrix));
     camera.setExtrinsicMatrix(extrinsicMatrix);

@@ -121,6 +121,16 @@ NS_ASSUME_NONNULL_BEGIN
     GravityEstimator _gravityEstimator;
 }
 
++ (float)focalLengthScaleFactor
+{
+    return AVCameraCalibrationFocalLengthScaleFactor();
+}
+
++ (void)setFocalLengthScaleFactor:(float)focalLengthScaleFactor
+{
+    SetAVCameraCalibrationFocalLengthScaleFactor(focalLengthScaleFactor);
+}
+
 - (instancetype)initWithDevice:(id<MTLDevice>)device
                   commandQueue:(id<MTLCommandQueue>)commandQueue
                 maxThreadCount:(int)maxThreadCount
